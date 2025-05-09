@@ -96,7 +96,7 @@ class BTC_OT_MarkCurrentKeyframe(Operator):
             if item.frame == current_frame:
                 item.is_marked = True
                 # Update timeline markers
-                timeline_utils.update_timeline_markers(context)
+                timeline_utils.update_timeline_markers(context.scene)
                 self.report({'INFO'}, f"Marked keyframe at frame {current_frame}")
                 return {'FINISHED'}
         
@@ -106,7 +106,7 @@ class BTC_OT_MarkCurrentKeyframe(Operator):
         item.is_marked = True
         
         # Update timeline markers
-        timeline_utils.update_timeline_markers(context)
+        timeline_utils.update_timeline_markers(context.scene)
         
         self.report({'INFO'}, f"Added and marked keyframe at frame {current_frame}")
         return {'FINISHED'}
@@ -130,7 +130,7 @@ class BTC_OT_ClearCurrentKeyframe(Operator):
             if item.frame == current_frame:
                 item.is_marked = False
                 # Update timeline markers
-                timeline_utils.update_timeline_markers(context)
+                timeline_utils.update_timeline_markers(context.scene)
                 self.report({'INFO'}, f"Cleared keyframe at frame {current_frame}")
                 return {'FINISHED'}
         
@@ -156,7 +156,7 @@ class BTC_OT_MarkAllKeyframes(Operator):
                 count += 1
         
         # Update timeline markers
-        timeline_utils.update_timeline_markers(context)
+        timeline_utils.update_timeline_markers(context.scene)
         
         self.report({'INFO'}, f"Marked {count} keyframes")
         return {'FINISHED'}
@@ -180,7 +180,7 @@ class BTC_OT_ClearAllKeyframes(Operator):
                 count += 1
         
         # Update timeline markers
-        timeline_utils.update_timeline_markers(context)
+        timeline_utils.update_timeline_markers(context.scene)
         
         self.report({'INFO'}, f"Cleared {count} keyframes")
         return {'FINISHED'}
@@ -252,12 +252,12 @@ class BTC_OT_RefreshKeyframeList(Operator):
                 item.is_marked = frame in marked_frames
         
         # Update timeline markers
-        timeline_utils.update_timeline_markers(context)
+        timeline_utils.update_timeline_markers(context.scene)
         
         self.report({'INFO'}, "Keyframe list refreshed")
         return {'FINISHED'}
 
-# Add keyframe (placeholder)
+# Add keyframe
 class BTC_OT_KeyframeAdd(Operator):
     bl_idname = "btc.keyframe_add"
     bl_label = "Add Keyframe"
@@ -279,12 +279,12 @@ class BTC_OT_KeyframeAdd(Operator):
         item.is_marked = True
         
         # Update timeline markers
-        timeline_utils.update_timeline_markers(context)
+        timeline_utils.update_timeline_markers(context.scene)
         
         self.report({'INFO'}, f"Added keyframe at frame {current_frame}")
         return {'FINISHED'}
 
-# Remove keyframe (placeholder)
+# Remove keyframe
 class BTC_OT_KeyframeRemove(Operator):
     bl_idname = "btc.keyframe_remove"
     bl_label = "Remove Keyframe"
@@ -308,12 +308,12 @@ class BTC_OT_KeyframeRemove(Operator):
             context.scene.btc_keyframe_index = max(0, len(context.scene.btc_keyframes) - 1)
         
         # Update timeline markers
-        timeline_utils.update_timeline_markers(context)
+        timeline_utils.update_timeline_markers(context.scene)
         
         self.report({'INFO'}, f"Removed keyframe at frame {frame}")
         return {'FINISHED'}
 
-# Move keyframe in list (placeholder)
+# Move keyframe in list
 class BTC_OT_KeyframeMove(Operator):
     bl_idname = "btc.keyframe_move"
     bl_label = "Move Keyframe"
@@ -423,3 +423,16 @@ classes = [
     BTC_OT_KeyframeMove,
     BTC_UL_KeyframeList,
 ]
+
+# Đăng ký các lớp
+def register():
+    for cls in classes:
+        bpy.utils.register_class(cls)
+
+# Hủy đăng ký các lớp
+def unregister():
+    for cls in reversed(classes):
+        try:
+            bpy.utils.unregister_class(cls)
+        except:
+            pass

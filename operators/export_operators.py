@@ -5,7 +5,7 @@ import time
 import tempfile
 from bpy.types import Operator
 from bpy.props import StringProperty
-from ..utils import file_utils, preferences
+from ..utils import file_utils, preferences, timeline_utils
 
 # Export Object
 class BTC_OT_ExportObject(Operator):
@@ -59,7 +59,7 @@ class BTC_OT_ExportObject(Operator):
                 return {'CANCELLED'}
             
             # Auto open Cascadeur if option enabled
-            if prefs.auto_open_cascadeur:
+            if prefs and hasattr(prefs, "auto_open_cascadeur") and prefs.auto_open_cascadeur:
                 bpy.ops.btc.open_cascadeur()
             
             self.report({'INFO'}, f"Exported object to {fbx_path}")
@@ -68,7 +68,8 @@ class BTC_OT_ExportObject(Operator):
         except Exception as e:
             self.report({'ERROR'}, f"Export error: {str(e)}")
             return {'CANCELLED'}
-def export_fbx(self, context, filepath):
+    
+    def export_fbx(self, context, filepath):
         """Export armature to FBX"""
         try:
             # Save current selection state
@@ -137,10 +138,15 @@ class BTC_OT_ExportAnimation(Operator):
         # Get default filename from preferences
         addon_prefs = preferences.get_preferences(context)
         if addon_prefs:
-            directory = addon_prefs.export_path
-            filename = addon_prefs.export_filename
-            if directory and filename:
-                self.filepath = os.path.join(directory, f"{filename}_keyframes.json")
+            # Check if export_path and export_filename properties exist
+            has_export_path = hasattr(addon_prefs, "export_path") and addon_prefs.export_path
+            has_export_filename = hasattr(addon_prefs, "export_filename") and addon_prefs.export_filename
+            
+            if has_export_path and has_export_filename:
+                directory = addon_prefs.export_path
+                filename = addon_prefs.export_filename
+                if directory and filename:
+                    self.filepath = os.path.join(directory, f"{filename}_keyframes.json")
             else:
                 # Fallback to Blender file name
                 blend_path = bpy.data.filepath
@@ -200,7 +206,7 @@ class BTC_OT_ExportAnimation(Operator):
             
             return {'FINISHED'}
         except Exception as e:
-            self.report({'ERROR'}, f"Error exporting metadata: {e}")
+            self.report({'ERROR'}, f"Error exporting metadata: {str(e)}")
             return {'CANCELLED'}
     
     def get_marked_keyframes(self, context):
@@ -247,10 +253,12 @@ class BTC_OT_ExportAnimation(Operator):
             
             for op_name, success_msg in arp_methods:
                 try:
-                    getattr(bpy.ops, op_name)('INVOKE_DEFAULT')
-                    self.report({'INFO'}, success_msg)
-                    success = True
-                    break
+                    op_parts = op_name.split('.')
+                    if len(op_parts) == 2 and hasattr(bpy.ops, op_parts[0]) and hasattr(getattr(bpy.ops, op_parts[0]), op_parts[1]):
+                        getattr(bpy.ops, op_name)('INVOKE_DEFAULT')
+                        self.report({'INFO'}, success_msg)
+                        success = True
+                        break
                 except Exception as e:
                     print(f"ARP export attempt failed with {op_name}: {e}")
             
@@ -326,10 +334,12 @@ class BTC_OT_ExportAutoRigPro(Operator):
             
             for op_name, success_msg in arp_methods:
                 try:
-                    getattr(bpy.ops, op_name)('INVOKE_DEFAULT')
-                    self.report({'INFO'}, success_msg)
-                    success = True
-                    break
+                    op_parts = op_name.split('.')
+                    if len(op_parts) == 2 and hasattr(bpy.ops, op_parts[0]) and hasattr(getattr(bpy.ops, op_parts[0]), op_parts[1]):
+                        getattr(bpy.ops, op_name)('INVOKE_DEFAULT')
+                        self.report({'INFO'}, success_msg)
+                        success = True
+                        break
                 except Exception as e:
                     print(f"ARP export attempt failed with {op_name}: {e}")
             
@@ -421,7 +431,7 @@ class BTC_OT_ExportComplete(Operator):
                 return {'CANCELLED'}
             
             # Auto open Cascadeur if option enabled
-            if prefs.auto_open_cascadeur:
+            if prefs and hasattr(prefs, "auto_open_cascadeur") and prefs.auto_open_cascadeur:
                 bpy.ops.btc.open_cascadeur()
             
             self.report({'INFO'}, f"Created trigger for Cascadeur at {trigger_path}")
@@ -438,3 +448,16 @@ classes = [
     BTC_OT_ExportAutoRigPro,
     BTC_OT_ExportComplete,
 ]
+
+# Register classes
+def register():
+    for cls in classes:
+        bpy.utils.register_class(cls)
+
+# Unregister classes
+def unregister():
+    for cls in reversed(classes):
+        try:
+            bpy.utils.unregister_class(cls)
+        except:
+            pass

@@ -62,8 +62,18 @@ class FileWatcher:
                 
                 # Dọn dẹp các file cũ nếu cần
                 try:
-                    prefs = preferences.get_preferences(bpy.context)
-                    file_utils.cleanup_old_triggers(self.exchange_folder, prefs.cleanup_interval)
+                    # Kiểm tra context có sẵn không
+                    if hasattr(bpy, "context") and bpy.context:
+                        prefs = preferences.get_preferences(bpy.context)
+                        # Kiểm tra xem prefs có thuộc tính cleanup_interval không
+                        if prefs and hasattr(prefs, "cleanup_interval"):
+                            file_utils.cleanup_old_triggers(self.exchange_folder, prefs.cleanup_interval)
+                        else:
+                            # Fallback to default cleanup interval
+                            file_utils.cleanup_old_triggers(self.exchange_folder, 24)
+                    else:
+                        # Fallback to default cleanup interval
+                        file_utils.cleanup_old_triggers(self.exchange_folder, 24)
                 except Exception as e:
                     # Only log cleanup errors occasionally to avoid spamming
                     current_time = time.time()
@@ -136,7 +146,8 @@ class FileWatcher:
         # Cố gắng hiển thị thông báo trong Blender UI nếu có thể
         try:
             def show_message():
-                bpy.ops.wm.report_info({'ERROR'}, f"B2C FileWatcher: {message}")
+                if hasattr(bpy.ops, "wm") and hasattr(bpy.ops.wm, "report_info"):
+                    bpy.ops.wm.report_info({'ERROR'}, f"B2C FileWatcher: {message}")
                 return None
             
             bpy.app.timers.register(show_message, first_interval=0.1)
@@ -149,25 +160,33 @@ def load_handler(dummy):
     """Handler được gọi khi Blender khởi động."""
     # Khởi động FileWatcher với addon preferences
     try:
+        # Đảm bảo context đã sẵn sàng
+        if not hasattr(bpy, "context") or not bpy.context:
+            print("Context not ready, skipping file watcher initialization")
+            return
+            
         exchange_folder = preferences.get_exchange_folder(bpy.context)
         
         # Khởi động watcher với callback xử lý trigger
         watcher = FileWatcher(exchange_folder, process_trigger)
         watcher.start()
         
-        # Lưu watcher vào addon_data
+        # Lưu watcher vào WindowManager
         if not hasattr(bpy.types, "WindowManager"):
             print("WindowManager not found, skipping file watcher registration")
             return
             
+        # Kiểm tra xem thuộc tính btc_file_watcher đã được đăng ký chưa
         if not hasattr(bpy.types.WindowManager, "btc_file_watcher"):
             # Add property dynamically
             bpy.types.WindowManager.btc_file_watcher = bpy.props.PointerProperty(
                 type=bpy.types.PropertyGroup
             )
             
-        # Store watcher reference
-        bpy.context.window_manager.btc_file_watcher = watcher
+        # Store watcher reference - this is not a proper way to store Python objects,
+        # but we're just using it as a temporary reference holder
+        if hasattr(bpy.context, "window_manager"):
+            bpy.context.window_manager["btc_file_watcher"] = watcher
         
         print("B2C File watcher started")
     except Exception as e:
@@ -175,23 +194,39 @@ def load_handler(dummy):
 
 def process_trigger(trigger_data):
     """Xử lý dữ liệu trigger từ Cascadeur."""
+    # Safety check
+    if not trigger_data or not isinstance(trigger_data, dict):
+        print("Invalid trigger data received")
+        return
+        
     action = trigger_data.get("action")
     data = trigger_data.get("data", {})
     
     print(f"Received trigger: {action}")
     
-    # Xử lý các hành động khác nhau
+    # Xử lý các hành động khác nhau - đảm bảo an toàn khi thêm vào hàng đợi
     if action == "import_scene":
         # Thêm vào hàng đợi xử lý của Blender
-        bpy.app.timers.register(lambda: process_import_scene(data))
+        try:
+            bpy.app.timers.register(lambda: process_import_scene(data))
+        except Exception as e:
+            print(f"Error registering import_scene timer: {e}")
     elif action == "import_all_scenes":
-        bpy.app.timers.register(lambda: process_import_all_scenes(data))
+        try:
+            bpy.app.timers.register(lambda: process_import_all_scenes(data))
+        except Exception as e:
+            print(f"Error registering import_all_scenes timer: {e}")
     elif action == "clean_keyframes":
-        bpy.app.timers.register(lambda: process_clean_keyframes(data))
+        try:
+            bpy.app.timers.register(lambda: process_clean_keyframes(data))
+        except Exception as e:
+            print(f"Error registering clean_keyframes timer: {e}")
+    else:
+        print(f"Unknown action: {action}")
 
 def process_import_scene(data):
     """Xử lý import scene từ Cascadeur."""
-    fbx_path = data.get("fbx_path")
+    fbx_path = data.get("fbx_path") if data else None
     if not fbx_path or not os.path.exists(fbx_path):
         print(f"FBX file not found: {fbx_path}")
         return None
@@ -203,11 +238,12 @@ def process_import_scene(data):
         
         # Hiển thị thông báo thành công
         def show_message():
-            bpy.context.window_manager.popup_menu(
-                lambda self, context: self.layout.label(text=f"Imported scene from Cascadeur"),
-                title="Import Successful", 
-                icon='INFO'
-            )
+            if hasattr(bpy, "context") and bpy.context and hasattr(bpy.context, "window_manager"):
+                bpy.context.window_manager.popup_menu(
+                    lambda self, context: self.layout.label(text=f"Imported scene from Cascadeur"),
+                    title="Import Successful", 
+                    icon='INFO'
+                )
             return None
         
         bpy.app.timers.register(show_message, first_interval=0.5)
@@ -216,11 +252,12 @@ def process_import_scene(data):
         
         # Hiển thị thông báo lỗi
         def show_error():
-            bpy.context.window_manager.popup_menu(
-                lambda self, context: self.layout.label(text=f"Error importing scene: {str(e)}"),
-                title="Import Failed", 
-                icon='ERROR'
-            )
+            if hasattr(bpy, "context") and bpy.context and hasattr(bpy.context, "window_manager"):
+                bpy.context.window_manager.popup_menu(
+                    lambda self, context: self.layout.label(text=f"Error importing scene: {str(e)}"),
+                    title="Import Failed", 
+                    icon='ERROR'
+                )
             return None
         
         bpy.app.timers.register(show_error, first_interval=0.5)
@@ -229,7 +266,7 @@ def process_import_scene(data):
 
 def process_import_all_scenes(data):
     """Xử lý import tất cả scene từ Cascadeur."""
-    fbx_paths = data.get("fbx_paths", [])
+    fbx_paths = data.get("fbx_paths", []) if data else []
     
     if not fbx_paths:
         print("No FBX paths provided for import_all_scenes")
@@ -259,11 +296,12 @@ def process_import_all_scenes(data):
         if error_count > 0:
             message += f", {error_count} failed"
             
-        bpy.context.window_manager.popup_menu(
-            lambda self, context: self.layout.label(text=message),
-            title="Import Summary", 
-            icon='INFO' if error_count == 0 else 'ERROR'
-        )
+        if hasattr(bpy, "context") and bpy.context and hasattr(bpy.context, "window_manager"):
+            bpy.context.window_manager.popup_menu(
+                lambda self, context: self.layout.label(text=message),
+                title="Import Summary", 
+                icon='INFO' if error_count == 0 else 'ERROR'
+            )
         return None
     
     if success_count > 0 or error_count > 0:
@@ -289,6 +327,11 @@ def process_clean_keyframes(data):
     
     # Update UI keyframes list
     try:
+        # Kiểm tra context có sẵn không
+        if not hasattr(bpy, "context") or not bpy.context:
+            print("Context not available for clean_keyframes")
+            return None
+            
         # Match keyframes in UI list
         scene = bpy.context.scene
         if hasattr(scene, "btc_keyframes"):
@@ -298,13 +341,19 @@ def process_clean_keyframes(data):
             
             print(f"Updated {len(keyframes)} keyframes in UI")
             
+            # Cập nhật timeline markers nếu cần thiết
+            if hasattr(scene, "btc_show_markers") and scene.btc_show_markers:
+                from . import timeline_utils
+                timeline_utils.update_timeline_markers(scene)
+            
             # Show notification
             def show_notification():
-                bpy.context.window_manager.popup_menu(
-                    lambda self, context: self.layout.label(text=f"Updated {len(keyframes)} keyframes from Cascadeur"),
-                    title="Keyframes Updated", 
-                    icon='INFO'
-                )
+                if hasattr(bpy.context, "window_manager"):
+                    bpy.context.window_manager.popup_menu(
+                        lambda self, context: self.layout.label(text=f"Updated {len(keyframes)} keyframes from Cascadeur"),
+                        title="Keyframes Updated", 
+                        icon='INFO'
+                    )
                 return None
             
             bpy.app.timers.register(show_notification, first_interval=0.5)

@@ -11,39 +11,45 @@ def frame_change_handler(scene):
 def mark_update_callback(self, context):
     """Callback when a keyframe's marked status changes"""
     # Update timeline markers if enabled
-    if hasattr(context.scene, "btc_show_markers") and context.scene.btc_show_markers:
+    if context and hasattr(context, "scene") and hasattr(context.scene, "btc_show_markers") and context.scene.btc_show_markers:
         update_timeline_markers(context.scene)
 
 def update_timeline_markers(scene):
     """Update timeline markers based on marked keyframes"""
+    # Đảm bảo đối tượng truyền vào là scene
+    if hasattr(scene, "bl_rna") and scene.bl_rna.identifier == "Context":
+        actual_scene = scene.scene  # Lấy scene từ context nếu đó là context
+    else:
+        actual_scene = scene  # Sử dụng trực tiếp nếu đã là scene
+    
     # Ensure property exists
-    if not hasattr(scene, "btc_show_markers"):
+    if not hasattr(actual_scene, "btc_show_markers"):
         bpy.types.Scene.btc_show_markers = bpy.props.BoolProperty(
             name="Show Timeline Markers", 
             default=True
         )
-        scene.btc_show_markers = True
+        actual_scene.btc_show_markers = True
     
     # Check if markers should be shown
-    if not scene.btc_show_markers:
+    if not actual_scene.btc_show_markers:
         # Remove all B2C markers
-        for marker in list(scene.timeline_markers):
+        for marker in list(actual_scene.timeline_markers):
             if marker.name.startswith("Key:"):
-                scene.timeline_markers.remove(marker)
+                actual_scene.timeline_markers.remove(marker)
         return
     
     # Get list of marked frames
-    marked_frames = get_marked_frames(scene)
+    marked_frames = get_marked_frames(actual_scene)
     
     # First remove old markers
-    for marker in list(scene.timeline_markers):
+    for marker in list(actual_scene.timeline_markers):
         if marker.name.startswith("Key:"):
-            scene.timeline_markers.remove(marker)
+            actual_scene.timeline_markers.remove(marker)
     
     # Create new markers for each marked frame
     for frame in marked_frames:
         # Create marker with frame number as name
-        marker = scene.timeline_markers.new(f"Key:{frame}", frame=frame)
+        marker = actual_scene.timeline_markers.new(f"Key:{frame}", frame=frame)
         # Set marker color (green)
         marker.color = (0.2, 0.8, 0.2)
 
